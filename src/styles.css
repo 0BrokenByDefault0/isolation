@@ -27,7 +27,7 @@ button, input, select { font-family: var(--mono); }
 ::selection { background: var(--acid); color: var(--void); }
 
 /* ============ SKY ============ */
-#sky { position: fixed; inset: 0; display: block; cursor: crosshair; }
+#sky { position: fixed; inset: 0; display: block; cursor: grab; touch-action: none; }
 
 .grain {
   position: fixed; inset: -50%;
@@ -285,6 +285,28 @@ h3.sec .mini { margin-left: 8px; }
 
 @media (max-width: 640px) {
   .restricted { display: none; }
-  .statbox { font-size: 10px; padding: 8px 10px; }
   .vol { display: none; }
+
+  /* one glitch line, not three — the sky is the hero on a phone */
+  header { padding: 12px 14px; }
+  .logo .l2, .logo .l3 { display: none; }
+  .logo .l1 { font-size: 24px; }
+
+  .statbox { font-size: 10px; padding: 8px 10px; max-width: 54vw; }
+  .statbox .warn { display: none; }
+  #hudChip { top: 12px; right: 14px; }
+
+  #hint { top: 150px; font-size: 9px; letter-spacing: .18em; max-width: 92vw; text-align: center; }
+
+  .transport { gap: 8px; padding: 8px 10px 6px; }
+  .tbtn { width: 30px; height: 28px; }
+  .tbtn.play { width: 38px; }
+  .tbtn.viz { padding: 0 8px; }
+  #npArt { width: 34px; height: 34px; }
+  .np .sub { display: none; }
+  .tab { padding: 8px 12px 10px; letter-spacing: .16em; }
+
+  #panel { height: min(62vh, 520px); }
+  .albums { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  input[type=range].v { height: 100px; }
 }

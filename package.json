@@ -1,0 +1,15 @@
+{
+  "name": "isolation",
+  "private": true,
+  "version": "0.1.0",
+  "description": "ISOLATION? — a local music player where your library becomes a night sky",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "A local music player where your library becomes a night sky",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "repository": {
     "type": "git",
     "url": "https://github.com/0BrokenByDefault0/isolation.git"

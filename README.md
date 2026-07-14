@@ -5,7 +5,7 @@
 **A local music player where your library becomes a night sky.**
 
 [![CI](https://github.com/0BrokenByDefault0/isolation/actions/workflows/ci.yml/badge.svg)](https://github.com/0BrokenByDefault0/isolation/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-3DFF6E.svg)](LICENSE)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-3DFF6E.svg)](LICENSE)
 [![No runtime dependencies](https://img.shields.io/badge/runtime%20deps-0-3DFF6E.svg)](package.json)
 
 Every album you add spawns a star that glows brighter while you listen.
@@ -131,4 +131,6 @@ especially useful when they describe the folder layout.
 
 ## License
 
-[MIT](LICENSE)
+[AGPL-3.0](LICENSE). If you modify ISOLATION and run it as a hosted
+service, the AGPL requires you to make your modified source available to
+its users.

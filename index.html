@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>ISOLATION? — sky music player</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23050608'/%3E%3Cpath d='M8 1 9.5 6.5 15 8 9.5 9.5 8 15 6.5 9.5 1 8 6.5 6.5Z' fill='%233DFF6E'/%3E%3C/svg%3E">
+  <script type="module" crossorigin src="./assets/index-8t1wJkhs.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-GTMXVlQ4.css">
+</head>
+<body>
+  <canvas id="sky"></canvas>
+  <div class="grain"></div>
+  <div class="scan"></div>
+
+  <header>
+    <div class="logo" aria-label="Isolation">
+      <div class="l1">ISOLATION<span class="q">?</span></div>
+      <div class="l2">ISOLATION?</div>
+      <div class="l3">ISOLA?ION</div>
+    </div>
+    <button id="hudChip" aria-label="Show sky HUD">⟨HUD⟩</button>
+    <div class="statbox" id="statbox">
+      <div class="hud-head"><span class="lbl">SKY HUD</span><button class="hud-x" id="hudOff" aria-label="Hide sky HUD">HIDE ✕</button></div>
+      <div class="row"><span class="k">⟨SKY:</span><span class="v" id="stStars">0 STARS⟩</span></div>
+      <div class="row"><span class="k">⟨CONSTELLATIONS:</span><span class="v pink" id="stConst">0 FORMED⟩</span></div>
+      <div class="row"><span class="k">⟨PLANETS:</span><span class="v" id="stPlan">0 SPAWNED⟩</span></div>
+      <div class="bar"><i id="stBar"></i></div>
+      <div class="warn" id="stNext">NEXT CONSTELLATION: 0/20</div>
+    </div>
+  </header>
+
+  <div id="hint">DRAG TO LOOK AROUND · TAP A STAR TO LISTEN</div>
+
+  <div class="restricted" aria-hidden="true">
+    <div class="r">R</div>
+    <div class="txt"><b>RESTRICTED</b>LOCAL FILES ONLY. NO CLOUD.<br>NO FOLLOWERS. NO GODS.</div>
+  </div>
+
+  <div id="toast" role="status"></div>
+
+  <section id="panel" aria-label="panel">
+    <div class="phead"><span id="ptitle">LIBRARY</span><button class="x" id="pclose">CLOSE ✕</button></div>
+    <div class="pbody" id="pbody"></div>
+  </section>
+
+  <nav id="hub">
+    <div class="transport">
+      <button class="tbtn" id="btPrev" title="Previous">◄◄</button>
+      <button class="tbtn play" id="btPlay" title="Play/Pause">►</button>
+      <button class="tbtn" id="btNext" title="Next">►►</button>
+      <img id="npArt" alt="">
+      <div class="np">
+        <div class="line"><span class="title" id="npTitle">NOTHING PLAYING</span><span class="sub" id="npSub">— PICK A STAR —</span></div>
+        <div class="seek">
+          <time id="tCur">0:00</time>
+          <div class="track" id="seekTrack"><div class="fill" id="seekFill"></div></div>
+          <time id="tEnd">0:00</time>
+        </div>
+      </div>
+      <button class="tbtn viz" id="btViz" title="Toggle sky visualizer">VIZ</button>
+      <div class="vol"><span>VOL</span><input type="range" class="h" id="vol" min="0" max="100" value="72" aria-label="Volume"></div>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="tab" data-tab="library">Library</button>
+      <button class="tab" data-tab="playlists">Playlists</button>
+      <button class="tab" data-tab="tags">Tag Editor</button>
+      <button class="tab" data-tab="eq">EQ · 10 Band</button>
+      <button class="tab" data-tab="sky">Sky Log</button>
+    </div>
+  </nav>
+
+</body>
+</html>

@@ -2,7 +2,12 @@
   "name": "isolation",
   "private": true,
   "version": "0.1.0",
-  "description": "ISOLATION? — a local music player where your library becomes a night sky",
+  "description": "A local music player where your library becomes a night sky",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/0BrokenByDefault0/isolation.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

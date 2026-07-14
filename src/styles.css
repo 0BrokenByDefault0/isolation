@@ -31,12 +31,12 @@ button, input, select { font-family: var(--mono); }
 
 .grain {
   position: fixed; inset: -50%;
-  pointer-events: none; z-index: 3; opacity: .14;
+  pointer-events: none; z-index: 3; opacity: .09;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='160' height='160' filter='url(%23n)' opacity='0.9'/></svg>");
   animation: grain 1.2s steps(4) infinite;
 }
 .scan {
-  position: fixed; inset: 0; pointer-events: none; z-index: 3; opacity: .28; mix-blend-mode: overlay;
+  position: fixed; inset: 0; pointer-events: none; z-index: 3; opacity: .16; mix-blend-mode: overlay;
   background: repeating-linear-gradient(0deg, rgba(0,0,0,.55) 0 1px, transparent 1px 3px);
 }
 @keyframes grain {

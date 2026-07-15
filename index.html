@@ -6,8 +6,8 @@
   <meta name="color-scheme" content="dark">
   <title>ISOLATION? — sky music player</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23050608'/%3E%3Cpath d='M8 1 9.5 6.5 15 8 9.5 9.5 8 15 6.5 9.5 1 8 6.5 6.5Z' fill='%233DFF6E'/%3E%3C/svg%3E">
-  <script type="module" crossorigin src="./assets/index-8t1wJkhs.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-GTMXVlQ4.css">
+  <script type="module" crossorigin src="./assets/index-CdTeV385.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-BdUA6mpC.css">
 </head>
 <body>
   <canvas id="sky"></canvas>
@@ -31,7 +31,20 @@
     </div>
   </header>
 
-  <div id="hint">DRAG TO LOOK AROUND · TAP A STAR TO LISTEN</div>
+  <div id="viewbar" aria-label="View controls">
+    <div class="vrow">
+      <span class="vlbl">ROTATE</span>
+      <input type="range" class="h vwide" id="vYaw" min="0" max="360" step="0.5" value="0" aria-label="Rotate view">
+      <span class="vval" id="vYawVal">0°</span>
+    </div>
+    <div class="vrow">
+      <span class="vlbl">TILT</span>
+      <input type="range" class="h" id="vPitch" min="-12" max="64" step="0.5" value="20" aria-label="Tilt view up or down">
+      <span class="vval" id="vPitchVal">20°</span>
+    </div>
+  </div>
+
+  <div id="hint">SLIDE THE TOP BARS TO LOOK AROUND · TAP A STAR TO LISTEN</div>
 
   <div class="restricted" aria-hidden="true">
     <div class="r">R</div>

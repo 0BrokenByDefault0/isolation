@@ -31,9 +31,12 @@ mesh pink, glitch red, CRT mono type.
 ## Features
 
 - **A sky that grows with your library.** Albums are stars on a celestial
-  sphere. Drag to rotate through a full 360 degrees, pinch or scroll to zoom.
-  Constellations form at every 20 albums; planets spawn at every 100, each
-  with its own palette, body type, tilt, rings, and moons.
+  sphere, arranged in a galactic belt of rings so panning sweeps through
+  constellation after constellation. ROTATE and TILT sliders at the top steer
+  the view (dragging still works); every load opens on a cinematic overview
+  of your universe. Constellations form at every 20 albums, each with its own
+  spine-and-branch asterism shape; planets spawn at every 100, each with its
+  own palette, body type, tilt, rings, and moons.
 - **Folder import with sensible album grouping.** One folder is one album.
   If the folder contains subfolders, each first-level subfolder becomes its
   own album, and deeper nesting (disc folders) collapses into its parent.
@@ -75,7 +78,7 @@ Library panel to seed stars, constellations, and planets.
 
 | Action | Control |
 | --- | --- |
-| Look around | Drag the sky (mouse or touch) |
+| Look around | ROTATE / TILT sliders at the top, or drag the sky |
 | Zoom | Scroll wheel, or two-finger pinch |
 | Play an album | Tap its star, or pick it in Library |
 | Toggle the visualizer | `VIZ` button in the transport |

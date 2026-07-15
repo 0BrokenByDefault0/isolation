@@ -1,18 +1,25 @@
 // The galactic landscape: a 3D celestial sphere. Every album is a star; each
-// complete group of 20 clusters around its own bearing and wires into a
-// constellation; every 100 albums spawns a planet with its own palette, body
-// type, tilt, and moons. Drag rotates the view through full 360° yaw and
-// near-vertical pitch; wheel or pinch zooms smoothly.
+// complete group of 20 forms a constellation with its own organic spine-and-
+// branch shape; every 100 albums spawns a planet. Constellations sit in tidy
+// rings around the viewer (a "galactic belt"), so panning the view sweeps
+// through them one by one instead of hunting across an empty sphere.
+//
+// Navigation is target-based: the top ROTATE/TILT sliders (or dragging the
+// canvas) set a target the camera eases toward — snappy in normal use, slow
+// and cinematic during the load-in overview.
 
 const VIZ_N = 48;
 export { VIZ_N };
 
-const sky = { stars: [], clusters: [], planets: [] };
-
-let seed = 9001;
-const srnd = () => ((seed = (48271 * seed) % 2147483647) / 2147483647);
+const sky = { stars: [], clusters: [], planets: [], dust: [] };
 
 const GOLDEN_ANGLE = 2.39996323;
+const TAU = Math.PI * 2;
+
+function rng(seed) {
+  let s = (seed % 2147483647) || 1;
+  return () => ((s = (48271 * s) % 2147483647) / 2147483647);
+}
 
 function norm(v) {
   const l = Math.hypot(v.x, v.y, v.z) || 1;
@@ -21,14 +28,26 @@ function norm(v) {
 function cross(a, b) {
   return { x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x };
 }
+function dirFrom(azimuth, elevation) {
+  const ce = Math.cos(elevation);
+  return { x: ce * Math.sin(azimuth), y: Math.sin(elevation), z: ce * Math.cos(azimuth) };
+}
 
-// Constellation bearings spiral around the whole sphere — above and below the
-// horizon — so groups never share a region.
+/* ---------- layout: the galactic belt ---------- */
+
+// Constellations fill rings around the viewer: 9 evenly spaced bearings per
+// ring, each ring at its own comfortable elevation, phase-shifted so rings
+// never stack vertically. Everything lands where the TILT slider can reach.
+const RING_SLOTS = 9;
+const RING_ELEV = [0.32, 0.68, 0.06, 0.98];
+
 function clusterCenter(g) {
-  const y = -0.3 + 1.0 * (((g * 0.61803) + 0.13) % 1);
-  const r = Math.sqrt(Math.max(0.01, 1 - y * y));
-  const th = g * GOLDEN_ANGLE + 0.7;
-  return { x: r * Math.cos(th), y, z: r * Math.sin(th) };
+  const ring = Math.floor(g / RING_SLOTS) % RING_ELEV.length;
+  const lap = Math.floor(g / (RING_SLOTS * RING_ELEV.length));
+  const jitter = rng(g * 7127 + 41);
+  const az = (g % RING_SLOTS) * (TAU / RING_SLOTS) + ring * 0.38 + lap * 0.19 + (jitter() - 0.5) * 0.1;
+  const el = RING_ELEV[ring] + (jitter() - 0.5) * 0.08;
+  return dirFrom(az, el);
 }
 
 function tangentBasis(c) {
@@ -38,47 +57,91 @@ function tangentBasis(c) {
   return [t1, t2];
 }
 
+// Each constellation is a spine of 8 bright stars (a momentum random walk)
+// with 12 dimmer companions branching off it — reads like a real asterism
+// instead of a scatter blob. Deterministic per group index.
+const patternCache = new Map();
+function makePattern(g) {
+  if (patternCache.has(g)) return patternCache.get(g);
+  const pr = rng(g * 2654435761 + 97);
+  const pts = [];
+  const edges = [];
+  let u = 0, w = 0, ang = pr() * TAU;
+  for (let k = 0; k < 8; k++) {
+    pts.push({ u, w, major: true });
+    if (k > 0) edges.push([k - 1, k]);
+    ang += (pr() - 0.5) * 1.3;
+    const step = 0.3 + pr() * 0.4;
+    u += Math.cos(ang) * step;
+    w += Math.sin(ang) * step * 0.7;
+  }
+  for (let k = 8; k < 20; k++) {
+    const parent = Math.floor(pr() * pts.length);
+    const a = pr() * TAU;
+    const d = 0.18 + pr() * 0.4;
+    pts.push({ u: pts[parent].u + Math.cos(a) * d, w: pts[parent].w + Math.sin(a) * d * 0.8, major: false });
+    edges.push([parent, k]);
+  }
+  // center and scale to an angular radius that reads well from the origin
+  let cu = 0, cw = 0;
+  for (const p of pts) { cu += p.u; cw += p.w; }
+  cu /= pts.length; cw /= pts.length;
+  let maxR = 0.001;
+  for (const p of pts) { p.u -= cu; p.w -= cw; maxR = Math.max(maxR, Math.hypot(p.u, p.w)); }
+  const R = 0.12 + pr() * 0.04;
+  for (const p of pts) { p.u = (p.u / maxR) * R; p.w = (p.w / maxR) * R; }
+  const pattern = { pts, edges };
+  patternCache.set(g, pattern);
+  return pattern;
+}
+
 function addStar(i) {
-  const c = clusterCenter(Math.floor(i / 20));
+  const g = Math.floor(i / 20);
+  const c = clusterCenter(g);
   const [t1, t2] = tangentBasis(c);
-  const a = srnd() * Math.PI * 2;
-  const amp = 0.05 + srnd() * 0.2;
-  const u = Math.cos(a) * amp, w = Math.sin(a) * amp * 0.8;
+  const p = makePattern(g).pts[i % 20];
+  const sr = rng(i * 3571 + 13);
   sky.stars.push({
-    dir: norm({ x: c.x + t1.x * u + t2.x * w, y: c.y + t1.y * u + t2.y * w, z: c.z + t1.z * u + t2.z * w }),
-    off: { u, w },
-    r: 0.65 + srnd() * 0.85,
-    tw: srnd() * Math.PI * 2,
-    sp: 0.5 + srnd() * 1.5,
-    pink: srnd() < 0.12,
+    dir: norm({
+      x: c.x + t1.x * p.u + t2.x * p.w,
+      y: c.y + t1.y * p.u + t2.y * p.w,
+      z: c.z + t1.z * p.u + t2.z * p.w,
+    }),
+    r: p.major ? 1.1 + sr() * 0.7 : 0.55 + sr() * 0.55,
+    tw: sr() * TAU,
+    sp: 0.5 + sr() * 1.5,
+    pink: sr() < 0.12,
     born: performance.now(),
   });
 }
 
+/* ---------- planets ---------- */
+
 // Planet palettes: 'r,g,b' strings usable in rgba().
 const PLANET_COLS = ['61,255,110', '255,79,195', '90,220,255', '255,190,90', '255,95,80', '185,130,255'];
+const PLANET_ELEV = [0.52, 0.2, 0.84];
 
 function makePlanet(p) {
-  let s = p * 7919 + 31;
-  const pr = () => ((s = (48271 * s) % 2147483647) / 2147483647);
-  const y = -0.2 + pr() * 0.8;
-  const r = Math.sqrt(Math.max(0.01, 1 - y * y));
-  const th = p * 2.1 + 1.3 + pr() * 0.8;
+  const pr = rng(p * 7919 + 31);
+  // offset half a slot from the constellation bearings so planets sit in the
+  // gaps between asterisms, not on top of them
+  const az = p * (TAU / 7) + TAU / (RING_SLOTS * 2) + pr() * 0.3;
+  const el = PLANET_ELEV[p % PLANET_ELEV.length] + (pr() - 0.5) * 0.1;
   const type = p % 3; // 0 wire globe, 1 banded giant + ring, 2 rocky + craters
   const moons = [];
   const nMoons = type === 2 ? 1 + Math.floor(pr() * 2) : pr() < 0.4 ? 1 : 0;
   for (let m = 0; m < nMoons; m++) {
-    moons.push({ dist: 1.6 + pr() * 0.9, speed: 0.0004 + pr() * 0.0005, phase: pr() * Math.PI * 2, size: 0.08 + pr() * 0.08 });
+    moons.push({ dist: 1.6 + pr() * 0.9, speed: 0.0004 + pr() * 0.0005, phase: pr() * TAU, size: 0.08 + pr() * 0.08 });
   }
   const craters = [];
   if (type === 2) {
     for (let c = 0; c < 4 + Math.floor(pr() * 3); c++) {
-      craters.push({ a: pr() * Math.PI * 2, d: 0.15 + pr() * 0.7, r: 0.08 + pr() * 0.14 });
+      craters.push({ a: pr() * TAU, d: 0.15 + pr() * 0.7, r: 0.08 + pr() * 0.14 });
     }
   }
   return {
-    dir: { x: r * Math.cos(th), y, z: r * Math.sin(th) },
-    size: 0.04 + pr() * 0.028,
+    dir: dirFrom(az, el),
+    size: 0.055 + pr() * 0.03,
     rot: pr() * Math.PI,
     tilt: (pr() - 0.5) * 0.9,
     col: PLANET_COLS[p % PLANET_COLS.length],
@@ -91,16 +154,35 @@ function makePlanet(p) {
   };
 }
 
+/* ---------- background dust ---------- */
+
+function makeDust() {
+  const pr = rng(424243);
+  sky.dust = [];
+  for (let i = 0; i < 420; i++) {
+    const y = pr() * 2 - 1;
+    const r = Math.sqrt(Math.max(0, 1 - y * y));
+    const th = i * GOLDEN_ANGLE;
+    sky.dust.push({
+      dir: { x: r * Math.cos(th), y, z: r * Math.sin(th) },
+      a: 0.05 + pr() * 0.22,
+      r: 0.3 + pr() * 0.6,
+      tw: pr() * TAU,
+    });
+  }
+}
+makeDust();
+
 function rebuildClusters() {
   sky.clusters = [];
   const n = sky.stars.length;
   for (let g = 0; g < Math.floor(n / 20); g++) {
-    const idx = Array.from({ length: 20 }, (_, k) => g * 20 + k);
-    idx.sort((a, b) => {
-      const A = sky.stars[a].off, B = sky.stars[b].off;
-      return Math.atan2(A.w, A.u) - Math.atan2(B.w, B.u);
+    sky.clusters.push({
+      idx: Array.from({ length: 20 }, (_, k) => g * 20 + k),
+      edges: makePattern(g).edges,
+      name: 'CST-' + String(g + 1).padStart(2, '0'),
+      center: clusterCenter(g),
     });
-    sky.clusters.push({ idx, name: 'CST-' + String(g + 1).padStart(2, '0'), center: clusterCenter(g) });
   }
   sky.planets = [];
   for (let p = 0; p < Math.floor(n / 100); p++) sky.planets.push(makePlanet(p));
@@ -118,23 +200,34 @@ export function constellations() {
 
 /* ---------- renderer ---------- */
 
+export const PITCH_MIN = -0.22, PITCH_MAX = 1.12;
+
 export function initSky(canvas, hooks) {
   const ctx = canvas.getContext('2d');
   let W = 0, H = 0;
   let hoverStar = -1;
 
-  // camera — open aimed at the first constellation so the sky never boots
-  // onto an empty patch
-  let yaw = 0.55, pitch = 0.3;
-  if (sky.stars.length) {
-    const c = sky.clusters.length ? sky.clusters[0].center : sky.stars[0].dir;
-    yaw = Math.atan2(c.x, c.z);
-    pitch = Math.atan2(c.y, Math.hypot(c.x, c.z));
+  /* ---- camera: everything eases toward a target ---- */
+
+  // Boot aims at the heart of the belt so the first frame is a postcard of
+  // the whole universe, then glides in from a pulled-back, offset vantage.
+  function overviewTarget() {
+    const c = sky.clusters.length ? sky.clusters[0].center
+      : sky.stars.length ? sky.stars[0].dir : dirFrom(0.9, 0.34);
+    // nudge half a slot so neighbouring constellations share the frame
+    return {
+      yaw: Math.atan2(c.x, c.z) + TAU / (RING_SLOTS * 2),
+      pitch: Math.max(PITCH_MIN, Math.min(PITCH_MAX, Math.atan2(c.y, Math.hypot(c.x, c.z)) + 0.06)),
+    };
   }
-  let vyaw = 0, vpitch = 0;
-  let zoom = 1, zoomTarget = 1;
-  const PITCH_MIN = -1.45, PITCH_MAX = 1.45;
-  const ZOOM_MIN = 0.65, ZOOM_MAX = 3.2;
+
+  const home = overviewTarget();
+  let yawT = home.yaw, pitchT = home.pitch;
+  let yaw = yawT - 1.15, pitch = Math.min(PITCH_MAX, pitchT + 0.45);
+  let zoom = 0.6, zoomTarget = 0.92;
+  const ZOOM_MIN = 0.55, ZOOM_MAX = 3.2;
+  const INTRO_MS = 3200;
+  const bootAt = performance.now();
 
   function resize() {
     const dpr = Math.min(devicePixelRatio || 1, 2);
@@ -191,12 +284,13 @@ export function initSky(canvas, hooks) {
     return Math.hypot(a.x - b.x, a.y - b.y);
   };
 
+  const clampPitch = (v) => Math.max(PITCH_MIN, Math.min(PITCH_MAX, v));
+
   canvas.style.touchAction = 'none';
   canvas.addEventListener('pointerdown', (e) => {
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size === 1) moved = 0;
     if (pointers.size === 2) { pinchBase = pinchDist(); pinchZoom = zoomTarget; }
-    vyaw = vpitch = 0;
     try { canvas.setPointerCapture(e.pointerId); } catch { /* synthetic or already-released pointer */ }
   });
   canvas.addEventListener('pointermove', (e) => {
@@ -210,9 +304,9 @@ export function initSky(canvas, hooks) {
       } else if (pointers.size === 1) {
         const k = 0.0032 / zoom;
         yaw -= dx * k;
-        pitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, pitch + dy * k));
-        vyaw = -dx * k;
-        vpitch = dy * k;
+        pitch = clampPitch(pitch + dy * k);
+        yawT = yaw;
+        pitchT = pitch;
       }
       hoverStar = -1;
     } else {
@@ -237,6 +331,19 @@ export function initSky(canvas, hooks) {
   }, { passive: false });
 
   /* ---- scene pieces ---- */
+
+  function drawDust(t) {
+    ctx.save();
+    for (const d of sky.dust) {
+      const p = project(d.dir);
+      if (!p) continue;
+      const tw = 0.7 + 0.3 * Math.sin(t * 0.0011 + d.tw);
+      ctx.globalAlpha = d.a * tw;
+      ctx.fillStyle = '#9fd8b4';
+      ctx.fillRect(p.x, p.y, d.r, d.r);
+    }
+    ctx.restore();
+  }
 
   function drawContours(t) {
     ctx.save();
@@ -325,15 +432,48 @@ export function initSky(canvas, hooks) {
     ctx.restore();
   }
 
+  // Soft colored haze behind each formed constellation — depth without noise.
+  function drawNebulae() {
+    for (let i = 0; i < sky.clusters.length; i++) {
+      const c = project(sky.clusters[i].center);
+      if (!c) continue;
+      const R = (0.22 * focal()) / c.z;
+      const col = i % 2 ? '255,79,195' : '61,255,110';
+      const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, R);
+      g.addColorStop(0, `rgba(${col},.06)`);
+      g.addColorStop(0.6, `rgba(${col},.025)`);
+      g.addColorStop(1, 'transparent');
+      ctx.fillStyle = g;
+      ctx.fillRect(c.x - R, c.y - R, R * 2, R * 2);
+    }
+  }
+
   function drawPlanet(pl, t) {
     const p = project(pl.dir);
     if (!p) return;
-    const R = Math.min(130, (pl.size * focal()) / p.z);
+    const R = Math.min(150, (pl.size * focal()) / p.z);
     if (R < 3) return;
     const col = pl.col;
     ctx.save();
     ctx.translate(p.x, p.y);
+
+    // atmosphere halo
+    const halo = ctx.createRadialGradient(0, 0, R * 0.8, 0, 0, R * 2.1);
+    halo.addColorStop(0, `rgba(${col},.14)`);
+    halo.addColorStop(1, 'transparent');
+    ctx.fillStyle = halo;
+    ctx.fillRect(-R * 2.1, -R * 2.1, R * 4.2, R * 4.2);
+
     ctx.rotate(pl.tilt);
+
+    // solid body so the planet occludes the dust field behind it
+    const body = ctx.createRadialGradient(-R * 0.35, -R * 0.35, R * 0.1, 0, 0, R);
+    body.addColorStop(0, 'rgba(14,22,18,.96)');
+    body.addColorStop(1, 'rgba(4,6,7,.96)');
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.arc(0, 0, R, 0, TAU);
+    ctx.fill();
 
     // body outline
     ctx.strokeStyle = `rgba(${col},.85)`;
@@ -341,7 +481,7 @@ export function initSky(canvas, hooks) {
     ctx.shadowColor = `rgba(${col},.7)`;
     ctx.shadowBlur = 10;
     ctx.beginPath();
-    ctx.arc(0, 0, R, 0, Math.PI * 2);
+    ctx.arc(0, 0, R, 0, TAU);
     ctx.stroke();
     ctx.shadowBlur = 0;
     ctx.strokeStyle = `rgba(${col},.38)`;
@@ -353,14 +493,14 @@ export function initSky(canvas, hooks) {
         const w = Math.abs(Math.cos(rot + (k * Math.PI) / 5)) * R;
         if (w < 2) continue;
         ctx.beginPath();
-        ctx.ellipse(0, 0, w, R, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, w, R, 0, 0, TAU);
         ctx.stroke();
       }
       for (let k = 1; k < 4; k++) {
         const yy = R * ((k / 4) * 2 - 1) * 0.75;
         const w = Math.sqrt(Math.max(0, R * R - yy * yy));
         ctx.beginPath();
-        ctx.ellipse(0, yy, w, w * 0.22, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, yy, w, w * 0.22, 0, 0, TAU);
         ctx.stroke();
       }
     } else if (pl.type === 1) {
@@ -371,7 +511,7 @@ export function initSky(canvas, hooks) {
         const w = Math.sqrt(Math.max(0, R * R - yy * yy));
         const wob = Math.sin(rot * 3 + k * 1.7) * R * 0.03;
         ctx.beginPath();
-        ctx.ellipse(0, yy + wob, w, Math.max(1.5, w * 0.13), 0, 0, Math.PI * 2);
+        ctx.ellipse(0, yy + wob, w, Math.max(1.5, w * 0.13), 0, 0, TAU);
         ctx.stroke();
       }
     } else {
@@ -382,19 +522,32 @@ export function initSky(canvas, hooks) {
         const cyr = Math.sin(c.a) * c.d * 0.8;
         const squash = Math.sqrt(Math.max(0.05, 1 - cxr * cxr));
         ctx.beginPath();
-        ctx.ellipse(cxr * R, cyr * R, c.r * R * squash, c.r * R, 0, 0, Math.PI * 2);
+        ctx.ellipse(cxr * R, cyr * R, c.r * R * squash, c.r * R, 0, 0, TAU);
         ctx.stroke();
       }
       ctx.beginPath();
-      ctx.ellipse(0, -R * 0.78, R * 0.45, R * 0.16, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, -R * 0.78, R * 0.45, R * 0.16, 0, 0, TAU);
       ctx.stroke();
     }
+
+    // terminator: night side creeping over one limb
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(0, 0, R - 0.5, 0, TAU);
+    ctx.clip();
+    const shade = ctx.createLinearGradient(-R, 0, R, 0);
+    shade.addColorStop(0, 'transparent');
+    shade.addColorStop(0.62, 'transparent');
+    shade.addColorStop(1, 'rgba(2,3,4,.72)');
+    ctx.fillStyle = shade;
+    ctx.fillRect(-R, -R, R * 2, R * 2);
+    ctx.restore();
 
     if (pl.ring) {
       ctx.strokeStyle = `rgba(${col},.55)`;
       for (const rr of [1.55, 1.75]) {
         ctx.beginPath();
-        ctx.ellipse(0, 0, R * rr, R * rr * 0.26, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, R * rr, R * rr * 0.26, 0, 0, TAU);
         ctx.stroke();
       }
     }
@@ -406,7 +559,7 @@ export function initSky(canvas, hooks) {
       const my = Math.sin(a) * R * m.dist * 0.3;
       ctx.fillStyle = `rgba(${col},.8)`;
       ctx.beginPath();
-      ctx.arc(mx, my, Math.max(1.2, R * m.size * 0.4), 0, Math.PI * 2);
+      ctx.arc(mx, my, Math.max(1.2, R * m.size * 0.4), 0, TAU);
       ctx.fill();
     }
 
@@ -423,22 +576,21 @@ export function initSky(canvas, hooks) {
     window.__sky = {
       planets: sky.planets,
       aim(dir, z = 1) {
-        yaw = Math.atan2(dir.x, dir.z);
-        pitch = Math.atan2(dir.y, Math.hypot(dir.x, dir.z));
+        yaw = yawT = Math.atan2(dir.x, dir.z);
+        pitch = pitchT = Math.atan2(dir.y, Math.hypot(dir.x, dir.z));
         zoom = zoomTarget = z;
       },
     };
   }
 
   function frame(t) {
-    // inertia + eased zoom
-    if (!pointers.size) {
-      yaw += vyaw;
-      pitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, pitch + vpitch));
-      vyaw *= 0.94;
-      vpitch *= 0.94;
-    }
-    zoom += (zoomTarget - zoom) * 0.12;
+    // ease toward targets — cinematic during the intro, snappy afterwards
+    const intro = t - bootAt < INTRO_MS;
+    const k = intro ? 0.028 : 0.2;
+    yaw += (yawT - yaw) * k;
+    pitch += (pitchT - pitch) * k;
+    pitch = clampPitch(pitch);
+    zoom += (zoomTarget - zoom) * (intro ? 0.028 : 0.12);
 
     const viz = hooks.isVizOn() ? hooks.getSpectrum(t) : null;
     const bass = viz ? (viz[0] + viz[1] + viz[2] + viz[3]) / 4 : 0;
@@ -451,26 +603,28 @@ export function initSky(canvas, hooks) {
     ctx.fillStyle = g1;
     ctx.fillRect(0, 0, W, H);
 
+    drawDust(t);
     drawContours(t);
     drawFloor(bass);
     if (viz) drawViz(viz);
+    drawNebulae();
     sky.planets.forEach((p) => drawPlanet(p, t));
 
     // project stars once per frame (also feeds hit testing)
     projStars.length = sky.stars.length;
     for (let i = 0; i < sky.stars.length; i++) projStars[i] = project(sky.stars[i].dir);
 
-    // constellation lines
+    // constellation lines follow each asterism's spine-and-branch pattern
     ctx.save();
     sky.clusters.forEach((cl, i) => {
-      ctx.strokeStyle = i % 2 ? 'rgba(255,79,195,.2)' : 'rgba(61,255,110,.2)';
+      ctx.strokeStyle = i % 2 ? 'rgba(255,79,195,.28)' : 'rgba(61,255,110,.28)';
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);
       ctx.lineDashOffset = viz ? -(t * 0.03) : 0;
       ctx.beginPath();
-      for (let k = 0; k < cl.idx.length; k++) {
-        const a = projStars[cl.idx[k]];
-        const b = projStars[cl.idx[(k + 1) % cl.idx.length]];
+      for (const [ea, eb] of cl.edges) {
+        const a = projStars[cl.idx[ea]];
+        const b = projStars[cl.idx[eb]];
         if (!a || !b) continue;
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
@@ -482,7 +636,7 @@ export function initSky(canvas, hooks) {
         ctx.fillStyle = i % 2 ? 'rgba(255,79,195,.45)' : 'rgba(61,255,110,.45)';
         ctx.font = '9px "Courier New",monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('⟨' + cl.name + '⟩', c.x, c.y);
+        ctx.fillText('⟨' + cl.name + '⟩', c.x, c.y + (0.16 * focal()) / c.z);
       }
     });
     ctx.restore();
@@ -514,7 +668,7 @@ export function initSky(canvas, hooks) {
         ctx.strokeStyle = `rgba(${col},.55)`;
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.arc(0, 0, 12 + 5 * Math.sin(t * 0.004), 0, Math.PI * 2);
+        ctx.arc(0, 0, 12 + 5 * Math.sin(t * 0.004), 0, TAU);
         ctx.stroke();
       }
       ctx.restore();
@@ -529,4 +683,20 @@ export function initSky(canvas, hooks) {
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+
+  /* ---- view API: the top ROTATE/TILT sliders drive these ---- */
+  return {
+    // absolute yaw in radians; camera takes the shortest way around
+    setYaw(rad) {
+      let d = (rad - yaw) % TAU;
+      if (d > Math.PI) d -= TAU;
+      if (d < -Math.PI) d += TAU;
+      yawT = yaw + d;
+    },
+    setPitch(rad) {
+      pitchT = clampPitch(rad);
+    },
+    view: () => ({ yaw, pitch }),
+    isDragging: () => pointers.size > 0,
+  };
 }

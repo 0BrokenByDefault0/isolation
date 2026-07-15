@@ -96,8 +96,23 @@ header {
 .bar { height: 6px; background: var(--acid-dim); margin-top: 8px; position: relative; overflow: hidden; }
 .bar i { position: absolute; inset: 0; right: auto; background: var(--acid); box-shadow: 0 0 10px var(--acid); }
 
+/* ============ VIEW BAR ============ */
+#viewbar {
+  position: fixed; left: 50%; top: 14px; transform: translateX(-50%); z-index: 6;
+  display: flex; flex-direction: column; gap: 6px;
+  border: 1px solid var(--acid-dim); background: rgba(5,6,8,.82);
+  padding: 8px 14px;
+  box-shadow: 0 0 18px rgba(61,255,110,.12), inset 0 0 24px rgba(61,255,110,.04);
+}
+#viewbar .vrow { display: flex; align-items: center; gap: 10px; }
+#viewbar .vlbl { font-size: 9px; letter-spacing: .25em; color: var(--ink-dim); width: 52px; text-align: right; }
+#viewbar .vval { font-size: 9px; color: var(--acid); font-variant-numeric: tabular-nums; width: 34px; }
+#viewbar input.vwide { width: 240px; }
+#viewbar input.h { width: 240px; height: 6px; }
+#viewbar .vrow:last-child input.h { width: 140px; }
+
 #hint {
-  position: fixed; left: 50%; top: 96px; transform: translateX(-50%); z-index: 4;
+  position: fixed; left: 50%; top: 106px; transform: translateX(-50%); z-index: 4;
   font-size: 11px; letter-spacing: .25em; color: var(--ink-dim);
   border: 1px dashed var(--acid-dim); padding: 6px 14px; background: rgba(5,6,8,.6);
   pointer-events: none; transition: opacity 1s; text-transform: uppercase;
@@ -296,7 +311,12 @@ h3.sec .mini { margin-left: 8px; }
   .statbox .warn { display: none; }
   #hudChip { top: 12px; right: 14px; }
 
-  #hint { top: 150px; font-size: 9px; letter-spacing: .18em; max-width: 92vw; text-align: center; }
+  #viewbar { top: 88px; padding: 6px 10px; gap: 4px; }
+  #viewbar input.h, #viewbar input.vwide { width: 150px; }
+  #viewbar .vrow:last-child input.h { width: 88px; }
+  #viewbar .vlbl { width: 44px; letter-spacing: .18em; }
+
+  #hint { top: 156px; font-size: 9px; letter-spacing: .18em; max-width: 92vw; text-align: center; }
 
   .transport { gap: 8px; padding: 8px 10px 6px; }
   .tbtn { width: 30px; height: 28px; }

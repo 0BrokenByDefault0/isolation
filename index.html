@@ -29,7 +29,20 @@
     </div>
   </header>
 
-  <div id="hint">DRAG TO LOOK AROUND · TAP A STAR TO LISTEN</div>
+  <div id="viewbar" aria-label="View controls">
+    <div class="vrow">
+      <span class="vlbl">ROTATE</span>
+      <input type="range" class="h vwide" id="vYaw" min="0" max="360" step="0.5" value="0" aria-label="Rotate view">
+      <span class="vval" id="vYawVal">0°</span>
+    </div>
+    <div class="vrow">
+      <span class="vlbl">TILT</span>
+      <input type="range" class="h" id="vPitch" min="-12" max="64" step="0.5" value="20" aria-label="Tilt view up or down">
+      <span class="vval" id="vPitchVal">20°</span>
+    </div>
+  </div>
+
+  <div id="hint">SLIDE THE TOP BARS TO LOOK AROUND · TAP A STAR TO LISTEN</div>
 
   <div class="restricted" aria-hidden="true">
     <div class="r">R</div>

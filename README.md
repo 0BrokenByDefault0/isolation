@@ -93,6 +93,19 @@ Library panel to seed stars, constellations, and planets.
 
 ## Browser support
 
+### iOS app
+
+The **Build unsigned iOS IPA** workflow packages this same app into an offline
+WebKit shell for iOS 26+. Its bundle ID is `com.brokenbydefault.isolation`.
+The iOS app retains imported audio in its own persistent storage, including
+across relaunches; Safari's session-only fallback below applies to the web app.
+The IPA is unsigned and must be signed before installation. Existing browser
+libraries do not automatically transfer into the iOS app.
+
+On a Mac: run `npm ci && npm run build && node scripts/prepare-ios.mjs`,
+then `swift scripts/make-ios-icon.swift` and `cd ios && xcodegen generate`.
+Open the generated Xcode project to build or sign for your device.
+
 | Browser | Playback | Library persists across reloads |
 | --- | --- | --- |
 | Chrome / Edge / Chromium | Yes | Yes (File System Access API) |

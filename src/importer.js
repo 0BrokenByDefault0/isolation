@@ -118,7 +118,7 @@ async function buildAlbum(group, onProgress) {
     })),
   };
 
-  // Fallback-imported files only live for this session.
+  // The iOS shell also persists these files when the album is saved.
   group.tracks.forEach((entry, k) => {
     if (entry.file) state.sessionFiles.set(trackId(id, k), entry.file);
   });
@@ -130,8 +130,11 @@ async function ingestGroups(groups, onProgress) {
   let added = 0;
   for (const g of groups.values()) {
     const album = await buildAlbum(g, onProgress);
+    try { await saveAlbum(album); } catch (error) {
+      for (const track of album.tracks) state.sessionFiles.delete(track.id);
+      throw error;
+    }
     state.albums.push(album);
-    await saveAlbum(album);
     added++;
   }
   return added;
@@ -144,15 +147,18 @@ export async function importViaPicker(onProgress) {
 }
 
 export function importViaInput(onProgress) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const inp = document.createElement('input');
     inp.type = 'file';
     inp.multiple = true;
     inp.setAttribute('webkitdirectory', '');
     inp.onchange = async () => {
-      const groups = groupFileList([...inp.files]);
-      resolve(await ingestGroups(groups, onProgress));
+      try {
+        const groups = groupFileList([...inp.files]);
+        resolve(await ingestGroups(groups, onProgress));
+      } catch (error) { reject(error); }
     };
+    inp.oncancel = () => resolve(0);
     inp.click();
   });
 }

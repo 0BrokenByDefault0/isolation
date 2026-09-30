@@ -1,2 +1,7 @@
 node_modules/
 dist/
+ios/Web/
+ios/Isolation.xcodeproj/
+ios/Isolation/Assets.xcassets/AppIcon.appiconset/AppIcon.png
+build/
+*.ipa

@@ -42,15 +42,21 @@ export function currentAlbum() {
 /* ---------- persistence ---------- */
 
 function persistableAlbum(a) {
-  // File objects can't be stored; directory-picker handles can.
+  // The iOS shell owns its storage and retains picker files. Browsers keep
+  // the existing handle/session behavior instead of copying a whole library.
   return {
     ...a,
-    tracks: a.tracks.map(({ file, ...t }) => t),
+    tracks: a.tracks.map(({ file, ...t }, i) => {
+      const localFile = state.sessionFiles.get(trackId(a.id, i)) || file;
+      return globalThis.ISOLATION_IOS && localFile ? { ...t, file: localFile } : t;
+    }),
   };
 }
 
 export async function saveAlbum(a) {
-  try { await db.put('albums', persistableAlbum(a)); } catch { /* private mode etc. */ }
+  try { await db.put('albums', persistableAlbum(a)); } catch (error) {
+    if (globalThis.ISOLATION_IOS) throw error; // Never report an unsaved iOS import as successful.
+  }
 }
 
 export async function savePlaylist(p) {
@@ -102,6 +108,7 @@ export async function resolveFile(album, trackIdx) {
   if (!t) return null;
   const sessionFile = state.sessionFiles.get(trackId(album.id, trackIdx));
   if (sessionFile) return sessionFile;
+  if (t.file instanceof Blob) return t.file;
   if (t.handle) {
     try {
       if ((await t.handle.queryPermission({ mode: 'read' })) !== 'granted') {

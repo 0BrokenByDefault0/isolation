@@ -10,7 +10,7 @@ export const state = {
   paused: true,
   pos: 0,
   eq: { gains: new Array(10).fill(0) },
-  settings: { hud: true, viz: false, volume: 0.72 },
+  settings: { hud: true, viz: false, skyLabels: true, volume: 0.72 },
   // session-only File objects for albums imported via the fallback picker
   // (webkitdirectory files are not persistable across reloads)
   sessionFiles: new Map(), // trackId -> File

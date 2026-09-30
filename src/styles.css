@@ -27,7 +27,7 @@ button, input, select { font-family: var(--mono); }
 ::selection { background: var(--acid); color: var(--void); }
 
 /* ============ SKY ============ */
-#sky { position: fixed; inset: 0; display: block; cursor: grab; touch-action: none; }
+#sky { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
 
 .grain {
   position: fixed; inset: -50%;
@@ -109,10 +109,13 @@ header {
 #viewbar .vval { font-size: 9px; color: var(--acid); font-variant-numeric: tabular-nums; width: 34px; }
 #viewbar input.vwide { width: 240px; }
 #viewbar input.h { width: 240px; height: 6px; }
-#viewbar .vrow:last-child input.h { width: 140px; }
+#viewbar #vPitch { width: 140px; }
+.view-actions { display: flex; justify-content: center; gap: 8px; }
+.view-actions .btn { min-height: 44px; padding: 6px 10px; font-size: 10px; letter-spacing: .1em; }
+#vLabels[aria-pressed=false] { border-color: var(--ink-dim); color: var(--ink-dim); }
 
 #hint {
-  position: fixed; left: 50%; top: 106px; transform: translateX(-50%); z-index: 4;
+  position: fixed; left: 50%; top: 140px; transform: translateX(-50%); z-index: 4;
   font-size: 11px; letter-spacing: .25em; color: var(--ink-dim);
   border: 1px dashed var(--acid-dim); padding: 6px 14px; background: rgba(5,6,8,.6);
   pointer-events: none; transition: opacity 1s; text-transform: uppercase;
@@ -311,12 +314,12 @@ h3.sec .mini { margin-left: 8px; }
   .statbox .warn { display: none; }
   #hudChip { top: 12px; right: 14px; }
 
-  #viewbar { top: 88px; padding: 6px 10px; gap: 4px; }
+  #viewbar { top: 132px; padding: 6px 10px; gap: 4px; }
   #viewbar input.h, #viewbar input.vwide { width: 150px; }
-  #viewbar .vrow:last-child input.h { width: 88px; }
+  #viewbar #vPitch { width: 88px; }
   #viewbar .vlbl { width: 44px; letter-spacing: .18em; }
 
-  #hint { top: 156px; font-size: 9px; letter-spacing: .18em; max-width: 92vw; text-align: center; }
+  #hint { top: 232px; font-size: 9px; letter-spacing: .18em; max-width: 92vw; text-align: center; }
 
   .transport { gap: 8px; padding: 8px 10px 6px; }
   .tbtn { width: 30px; height: 28px; }
@@ -329,4 +332,15 @@ h3.sec .mini { margin-left: 8px; }
   #panel { height: min(62vh, 520px); }
   .albums { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
   input[type=range].v { height: 100px; }
+}
+
+/* Keep a useful sky viewport on a phone held sideways. */
+@media (min-width: 641px) and (max-height: 500px) {
+  header { padding: 12px 14px; }
+  .logo .l1 { font-size: 24px; }
+  .logo .l2, .logo .l3, .statbox .warn, .statbox .bar, #hint, .restricted { display: none; }
+  .statbox { font-size: 9px; padding: 8px 10px; letter-spacing: .08em; }
+  #viewbar { top: 12px; padding: 6px 10px; gap: 4px; }
+  #viewbar input.h, #viewbar input.vwide { width: 160px; }
+  #viewbar #vPitch { width: 100px; }
 }

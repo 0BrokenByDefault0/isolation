@@ -8,11 +8,11 @@
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-3DFF6E.svg)](LICENSE)
 [![No runtime dependencies](https://img.shields.io/badge/runtime%20deps-0-3DFF6E.svg)](package.json)
 
-Every album you add spawns a star that glows brighter while you listen.
+Every album you add spawns an illuminated star that glows brighter while you listen.
 Every 20 albums wire together into a constellation.
 Every 100 albums spawns a planet in your sky.
 
-<img src="docs/sky.png" alt="The sky view: constellations of album stars above a wireframe grid horizon" width="800">
+<img src="docs/collection-overview-desktop.png" alt="The fitted collection overview: illuminated stars and planets with no sky labels" width="800">
 
 </div>
 
@@ -33,8 +33,12 @@ mesh pink, glitch red, CRT mono type.
 - **A sky that grows with your library.** Albums are stars on a celestial
   sphere, arranged in a galactic belt of rings so panning sweeps through
   constellation after constellation. ROTATE and TILT sliders at the top steer
-  the view (dragging still works); every load opens on a cinematic overview
-  of your universe. Constellations form at every 20 albums, each with its own
+  the view (dragging still works); every load opens centered on the entire
+  collection, fitted between the controls and player. **Fit Collection**
+  restores that view at any time. Zoom out for an unlabeled sky, or switch
+  **Labels: Off** to hide all celestial text at any zoom (remembered on reload).
+  Stars, planets and constellation lines stay illuminated even when paused
+  or with the visualizer off. Constellations form at every 20 albums, each with its own
   spine-and-branch asterism shape; planets spawn at every 100, each with its
   own palette, body type, tilt, rings, and moons.
 - **Folder import with sensible album grouping.** One folder is one album.
@@ -56,7 +60,7 @@ mesh pink, glitch red, CRT mono type.
 
 <div align="center">
 <img src="docs/planet.png" alt="A ringed wireframe planet rendered above the grid" width="49%">
-<img src="docs/mobile.png" alt="Mobile layout with the transport hub and a playing star" width="24%">
+<img src="docs/collection-overview-mobile.png" alt="Mobile collection overview with sky labels turned off" width="24%">
 </div>
 
 ## Quick start
@@ -80,6 +84,8 @@ Library panel to seed stars, constellations, and planets.
 | --- | --- |
 | Look around | ROTATE / TILT sliders at the top, or drag the sky |
 | Zoom | Scroll wheel, or two-finger pinch |
+| Center the whole collection | **Fit Collection** in the view controls |
+| Hide all sky labels | Zoom out, or toggle **Labels: Off** at any zoom |
 | Play an album | Tap its star, or pick it in Library |
 | Toggle the visualizer | `VIZ` button in the transport |
 | Hide the sky HUD | `HIDE` in the HUD panel |
@@ -111,15 +117,16 @@ src/sky.js          3D celestial sphere renderer and camera
 src/ui.js           transport, panels, playlists, tag editor, EQ
 ```
 
-The renderer is a single 2D canvas doing its own perspective projection:
-stars are unit vectors on a sphere around the camera, constellation bearings
-follow a golden-angle spiral so groups never overlap, and the ground grid is
-world-fixed so it swings as the view yaws.
+The renderer is a single 2D canvas doing its own perspective projection.
+Stars occupy a spherical galactic belt; the camera orbits the collection's
+bounds and can pull back outside the sphere to show it all. Background dust
+stays distant and does not affect framing. The ground grid is world-fixed.
 
 ## Development
 
 ```sh
 npm run dev        # dev server with hot reload
+npm test           # camera framing, label visibility and interaction checks
 npm run build      # production build to dist/
 npm run preview    # serve the production build
 ```

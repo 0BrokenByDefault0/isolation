@@ -1,6 +1,5 @@
 import './styles.css';
-import { state } from './state.js';
-import { loadPersisted } from './state.js';
+import { state, loadPersisted, saveSettings } from './state.js';
 import { initSky, syncStars, PITCH_MIN, PITCH_MAX } from './sky.js';
 import { initUI, updateStats, playAlbum, toast, getSpectrum } from './ui.js';
 
@@ -14,6 +13,18 @@ function bindViewBar(view) {
   const pitchEl = document.getElementById('vPitch');
   const yawVal = document.getElementById('vYawVal');
   const pitchVal = document.getElementById('vPitchVal');
+  const labels = document.getElementById('vLabels');
+  const applyLabels = () => {
+    labels.textContent = state.settings.skyLabels ? 'Labels: On' : 'Labels: Off';
+    labels.setAttribute('aria-pressed', String(state.settings.skyLabels));
+  };
+  applyLabels();
+  labels.addEventListener('click', () => {
+    state.settings.skyLabels = !state.settings.skyLabels;
+    applyLabels();
+    saveSettings();
+  });
+  document.getElementById('vFit').addEventListener('click', () => view.fitCollection());
   let held = false;
   for (const el of [yawEl, pitchEl]) {
     el.addEventListener('pointerdown', () => { held = true; });
@@ -48,6 +59,14 @@ async function boot() {
   updateStats();
 
   const view = initSky(document.getElementById('sky'), {
+    getViewport: () => ({
+      left: 16,
+      right: innerWidth - 16,
+      top: Math.max(...['viewbar', 'hint'].map((id) => document.getElementById(id).getBoundingClientRect().bottom),
+        document.querySelector('header').getBoundingClientRect().bottom) + 12,
+      bottom: document.getElementById('hub').getBoundingClientRect().top - 12,
+    }),
+    areLabelsOn: () => state.settings.skyLabels,
     getPlayingIndex: () => (state.playing ? state.playing.albumIdx : -1),
     isPaused: () => state.paused,
     isVizOn: () => state.settings.viz,
@@ -65,6 +84,10 @@ async function boot() {
   });
 
   bindViewBar(view);
+  // Header/player sizes can settle after the window resize event (rotation,
+  // HUD visibility, artwork). Refit only while still in the collection view.
+  const chromeResize = new ResizeObserver(() => view.resize());
+  for (const element of document.querySelectorAll('header, #viewbar, #hint, #hub')) chromeResize.observe(element);
 }
 
 boot();

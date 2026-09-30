@@ -99,7 +99,7 @@ function isRealTrack() {
   const album = currentAlbum();
   if (!album) return false;
   const t = currentTrack();
-  return !!(t && (t.handle || state.sessionFiles.has(t.id)));
+  return !!(t && (t.handle || t.file instanceof Blob || state.sessionFiles.has(t.id)));
 }
 
 export function renderNP() {
@@ -199,6 +199,8 @@ function renderLibrary() {
       const added = supportsFSAccess ? await importViaPicker(progress) : await importViaInput(progress);
       afterAdd(before, added, true);
     } catch (e) {
+      syncStars(state.albums.length);
+      updateStats();
       if (e && e.name !== 'AbortError') toast('IMPORT FAILED');
       refreshPanel();
     }

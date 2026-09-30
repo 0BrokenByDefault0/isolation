@@ -5,8 +5,8 @@
 // through them one by one instead of hunting across an empty sphere.
 //
 // Navigation is target-based: the top ROTATE/TILT sliders (or dragging the
-// canvas) set a target the camera eases toward — snappy in normal use, slow
-// and cinematic during the load-in overview.
+// canvas) orbit the collection. The opening view fits the actual collection,
+// and zooming out pulls the camera back far enough to include the whole belt.
 
 const VIZ_N = 48;
 export { VIZ_N };
@@ -201,6 +201,73 @@ export function constellations() {
 /* ---------- renderer ---------- */
 
 export const PITCH_MIN = -0.22, PITCH_MAX = 1.12;
+const ZOOM_MIN = 0.02, ZOOM_MAX = 3.2;
+const NEAR = 0.18;
+
+function cameraPoint(d, yaw, pitch, center) {
+  const x = d.x - center.x, y = d.y - center.y, z = d.z - center.z;
+  const x1 = Math.cos(yaw) * x - Math.sin(yaw) * z;
+  const z1 = Math.sin(yaw) * x + Math.cos(yaw) * z;
+  return { x: x1, y: y * Math.cos(pitch) - z1 * Math.sin(pitch), z: y * Math.sin(pitch) + z1 * Math.cos(pitch) };
+}
+
+// Fit real objects, including every ring/moon's full orbit. Background dust
+// never enlarges the collection bounds. The camera can sit outside the belt,
+// so a collection spanning more than a hemisphere is still fully visible.
+function collectionView(width, height, viewport) {
+  const objects = [
+    ...sky.stars.map((s) => ({ dir: s.dir, radius: 0 })),
+    ...sky.planets.map((p) => ({ dir: p.dir, radius: p.size * Math.max(2.1, ...p.moons.map((m) => m.dist + m.size)) })),
+  ];
+  if (!objects.length) return { yaw: 0, pitch: 0.34, zoom: 0.92, center: { x: 0, y: 0, z: 0 } };
+
+  // Place the seam in the largest empty azimuth gap, rather than assuming
+  // that the first constellation is the middle of the library.
+  const angles = objects.map(({ dir }) => (Math.atan2(dir.x, dir.z) + TAU) % TAU).sort((a, b) => a - b);
+  let gap = -1, yaw = 0;
+  for (let i = 0; i < angles.length; i++) {
+    const next = i + 1 < angles.length ? angles[i + 1] : angles[0] + TAU;
+    if (next - angles[i] > gap) {
+      gap = next - angles[i];
+      yaw = (next + angles[i] + TAU) / 2;
+    }
+  }
+  yaw %= TAU;
+  let low = Infinity, high = -Infinity;
+  for (const { dir } of objects) {
+    const el = Math.atan2(dir.y, Math.hypot(dir.x, dir.z));
+    low = Math.min(low, el); high = Math.max(high, el);
+  }
+  const pitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, (low + high) / 2));
+  const origin = { x: 0, y: 0, z: 0 };
+  const points = objects.map((o) => ({ ...cameraPoint(o.dir, yaw, pitch, origin), radius: o.radius }));
+  const min = { x: Infinity, y: Infinity, z: Infinity }, max = { x: -Infinity, y: -Infinity, z: -Infinity };
+  for (const p of points) for (const axis of ['x', 'y', 'z']) {
+    min[axis] = Math.min(min[axis], p[axis] - p.radius);
+    max[axis] = Math.max(max[axis], p[axis] + p.radius);
+  }
+  const c = { x: (min.x + max.x) / 2, y: (min.y + max.y) / 2, z: (min.z + max.z) / 2 };
+  const f = Math.min(width, height) * 0.95;
+  // Leave room for star glows and labels (when enabled) inside the safe area.
+  const halfW = Math.max(1, (viewport.right - viewport.left) / 2 - 32);
+  const halfH = Math.max(1, (viewport.bottom - viewport.top) / 2 - 32);
+  let distance = 1 / ZOOM_MAX;
+  for (const p of points) {
+    distance = Math.max(distance, c.z - p.z + p.radius + NEAR,
+      c.z - p.z + p.radius + (Math.abs(p.x - c.x) + p.radius) * f / halfW,
+      c.z - p.z + p.radius + (Math.abs(p.y - c.y) + p.radius) * f / halfH);
+  }
+  // Inverse camera rotation: retain a world-space orbit center while the
+  // user rotates, tilts or zooms, rather than applying a screen-space nudge.
+  const y = c.y * Math.cos(pitch) + c.z * Math.sin(pitch);
+  const z = -c.y * Math.sin(pitch) + c.z * Math.cos(pitch);
+  const center = { x: c.x * Math.cos(yaw) + z * Math.sin(yaw), y, z: -c.x * Math.sin(yaw) + z * Math.cos(yaw) };
+  return { yaw, pitch, zoom: Math.min(ZOOM_MAX, 1 / distance), center };
+}
+
+function skyLabelOpacity(zoom, enabled) {
+  return enabled ? Math.max(0, Math.min(1, (zoom - 0.45) / 0.35)) : 0;
+}
 
 export function initSky(canvas, hooks) {
   const ctx = canvas.getContext('2d');
@@ -209,53 +276,48 @@ export function initSky(canvas, hooks) {
 
   /* ---- camera: everything eases toward a target ---- */
 
-  // Boot aims at the heart of the belt so the first frame is a postcard of
-  // the whole universe, then glides in from a pulled-back, offset vantage.
-  function overviewTarget() {
-    const c = sky.clusters.length ? sky.clusters[0].center
-      : sky.stars.length ? sky.stars[0].dir : dirFrom(0.9, 0.34);
-    // nudge half a slot so neighbouring constellations share the frame
-    return {
-      yaw: Math.atan2(c.x, c.z) + TAU / (RING_SLOTS * 2),
-      pitch: Math.max(PITCH_MIN, Math.min(PITCH_MAX, Math.atan2(c.y, Math.hypot(c.x, c.z)) + 0.06)),
-    };
-  }
+  let yaw = 0, yawT = 0, pitch = 0.34, pitchT = 0.34;
+  let zoom = 0.92, zoomTarget = 0.92;
+  let center = { x: 0, y: 0, z: 0 };
+  let viewport;
+  let overview = true, collectionCount = sky.stars.length;
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
-  const home = overviewTarget();
-  let yawT = home.yaw, pitchT = home.pitch;
-  let yaw = yawT - 1.15, pitch = Math.min(PITCH_MAX, pitchT + 0.45);
-  let zoom = 0.6, zoomTarget = 0.92;
-  const ZOOM_MIN = 0.55, ZOOM_MAX = 3.2;
-  const INTRO_MS = 3200;
-  const bootAt = performance.now();
+  function fitCollection() {
+    viewport = hooks.getViewport();
+    const home = collectionView(W, H, viewport);
+    yaw = yawT = home.yaw;
+    pitch = pitchT = home.pitch;
+    zoom = zoomTarget = home.zoom;
+    center = home.center;
+    overview = true;
+    hoverStar = -1;
+  }
 
   function resize() {
     const dpr = Math.min(devicePixelRatio || 1, 2);
     W = innerWidth;
     H = innerHeight;
+    viewport = hooks.getViewport();
     canvas.width = W * dpr;
     canvas.height = H * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (overview) fitCollection();
   }
-  addEventListener('resize', resize);
+  // Read chrome bounds after the new orientation's media queries have laid out.
+  addEventListener('resize', () => requestAnimationFrame(resize));
   resize();
 
-  const focal = () => Math.min(W, H) * 0.95 * zoom;
-  const cx = () => W / 2;
-  const cyS = () => H * 0.42;
-  const NEAR = 0.18;
+  const focal = () => Math.min(W, H) * 0.95;
+  const cx = () => (viewport.left + viewport.right) / 2;
+  const cyS = () => (viewport.top + viewport.bottom) / 2;
 
-  // Works for unit directions and world positions alike (camera at origin).
-  function project(d) {
-    const cyw = Math.cos(yaw), syw = Math.sin(yaw);
-    const x1 = cyw * d.x - syw * d.z;
-    const z1 = syw * d.x + cyw * d.z;
-    const cp = Math.cos(pitch), sp = Math.sin(pitch);
-    const y2 = d.y * cp - z1 * sp;
-    const z2 = d.y * sp + z1 * cp;
-    if (z2 < NEAR) return null;
+  function project(d, background = false) {
+    const p = cameraPoint(d, yaw, pitch, background ? { x: 0, y: 0, z: 0 } : center);
+    const depth = p.z + (background ? 0 : 1 / zoom);
+    if (depth < NEAR) return null;
     const f = focal();
-    return { x: cx() + (x1 / z2) * f, y: cyS() - (y2 / z2) * f, z: z2 };
+    return { x: cx() + (p.x / depth) * f, y: cyS() - (p.y / depth) * f, z: depth };
   }
 
   function horizonY() {
@@ -290,7 +352,7 @@ export function initSky(canvas, hooks) {
   canvas.addEventListener('pointerdown', (e) => {
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size === 1) moved = 0;
-    if (pointers.size === 2) { pinchBase = pinchDist(); pinchZoom = zoomTarget; }
+    if (pointers.size === 2) { pinchBase = pinchDist(); pinchZoom = zoomTarget; moved = 7; }
     try { canvas.setPointerCapture(e.pointerId); } catch { /* synthetic or already-released pointer */ }
   });
   canvas.addEventListener('pointermove', (e) => {
@@ -299,10 +361,11 @@ export function initSky(canvas, hooks) {
       const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       moved += Math.abs(dx) + Math.abs(dy);
+      overview = false;
       if (pointers.size === 2 && pinchBase > 0) {
         zoomTarget = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, (pinchZoom * pinchDist()) / pinchBase));
       } else if (pointers.size === 1) {
-        const k = 0.0032 / zoom;
+        const k = 0.0032 / Math.max(0.55, zoom);
         yaw -= dx * k;
         pitch = clampPitch(pitch + dy * k);
         yawT = yaw;
@@ -327,6 +390,7 @@ export function initSky(canvas, hooks) {
   canvas.addEventListener('pointercancel', release);
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
+    overview = false;
     zoomTarget = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoomTarget * Math.exp(-e.deltaY * 0.0012)));
   }, { passive: false });
 
@@ -335,9 +399,9 @@ export function initSky(canvas, hooks) {
   function drawDust(t) {
     ctx.save();
     for (const d of sky.dust) {
-      const p = project(d.dir);
+      const p = project(d.dir, true);
       if (!p) continue;
-      const tw = 0.7 + 0.3 * Math.sin(t * 0.0011 + d.tw);
+      const tw = 0.92 + 0.08 * Math.sin(t * 0.0011 + d.tw);
       ctx.globalAlpha = d.a * tw;
       ctx.fillStyle = '#9fd8b4';
       ctx.fillRect(p.x, p.y, d.r, d.r);
@@ -448,18 +512,17 @@ export function initSky(canvas, hooks) {
     }
   }
 
-  function drawPlanet(pl, t) {
+  function drawPlanet(pl, t, labelAlpha) {
     const p = project(pl.dir);
     if (!p) return;
-    const R = Math.min(150, (pl.size * focal()) / p.z);
-    if (R < 3) return;
+    const R = Math.max(2.5, Math.min(150, (pl.size * focal()) / p.z));
     const col = pl.col;
     ctx.save();
     ctx.translate(p.x, p.y);
 
     // atmosphere halo
     const halo = ctx.createRadialGradient(0, 0, R * 0.8, 0, 0, R * 2.1);
-    halo.addColorStop(0, `rgba(${col},.14)`);
+    halo.addColorStop(0, `rgba(${col},.24)`);
     halo.addColorStop(1, 'transparent');
     ctx.fillStyle = halo;
     ctx.fillRect(-R * 2.1, -R * 2.1, R * 4.2, R * 4.2);
@@ -468,15 +531,16 @@ export function initSky(canvas, hooks) {
 
     // solid body so the planet occludes the dust field behind it
     const body = ctx.createRadialGradient(-R * 0.35, -R * 0.35, R * 0.1, 0, 0, R);
-    body.addColorStop(0, 'rgba(14,22,18,.96)');
-    body.addColorStop(1, 'rgba(4,6,7,.96)');
+    const rgb = col.split(',').map(Number);
+    body.addColorStop(0, `rgb(${rgb.map((v) => Math.round(v * 0.28)).join(',')})`);
+    body.addColorStop(1, `rgb(${rgb.map((v) => Math.round(v * 0.12)).join(',')})`);
     ctx.fillStyle = body;
     ctx.beginPath();
     ctx.arc(0, 0, R, 0, TAU);
     ctx.fill();
 
     // body outline
-    ctx.strokeStyle = `rgba(${col},.85)`;
+    ctx.strokeStyle = `rgba(${col},1)`;
     ctx.lineWidth = 1;
     ctx.shadowColor = `rgba(${col},.7)`;
     ctx.shadowBlur = 10;
@@ -484,7 +548,7 @@ export function initSky(canvas, hooks) {
     ctx.arc(0, 0, R, 0, TAU);
     ctx.stroke();
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = `rgba(${col},.38)`;
+    ctx.strokeStyle = `rgba(${col},.65)`;
 
     const rot = t * 0.00012 + pl.rot;
     if (pl.type === 0) {
@@ -530,21 +594,8 @@ export function initSky(canvas, hooks) {
       ctx.stroke();
     }
 
-    // terminator: night side creeping over one limb
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(0, 0, R - 0.5, 0, TAU);
-    ctx.clip();
-    const shade = ctx.createLinearGradient(-R, 0, R, 0);
-    shade.addColorStop(0, 'transparent');
-    shade.addColorStop(0.62, 'transparent');
-    shade.addColorStop(1, 'rgba(2,3,4,.72)');
-    ctx.fillStyle = shade;
-    ctx.fillRect(-R, -R, R * 2, R * 2);
-    ctx.restore();
-
     if (pl.ring) {
-      ctx.strokeStyle = `rgba(${col},.55)`;
+      ctx.strokeStyle = `rgba(${col},.8)`;
       for (const rr of [1.55, 1.75]) {
         ctx.beginPath();
         ctx.ellipse(0, 0, R * rr, R * rr * 0.26, 0, 0, TAU);
@@ -564,33 +615,42 @@ export function initSky(canvas, hooks) {
     }
 
     ctx.rotate(-pl.tilt);
-    ctx.fillStyle = `rgba(${col},.75)`;
+    ctx.fillStyle = `rgba(${col},${0.85 * labelAlpha})`;
     ctx.font = '9px "Courier New",monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('⟨' + pl.name + '⟩', 0, R * 1.8 + 12);
+    if (labelAlpha > 0) ctx.fillText('⟨' + pl.name + '⟩', 0, R * 1.8 + 12);
     ctx.restore();
   }
 
   // dev hook: open with #debug to drive the camera from the console/tests
   if (location.hash === '#debug') {
     window.__sky = {
-      planets: sky.planets,
+      get planets() { return sky.planets; },
+      get stars() { return sky.stars; },
+      project,
+      fitCollection,
+      view: () => ({ yaw, pitch, zoom, center, viewport, overview }),
       aim(dir, z = 1) {
+        overview = false;
+        center = { ...dir };
         yaw = yawT = Math.atan2(dir.x, dir.z);
         pitch = pitchT = Math.atan2(dir.y, Math.hypot(dir.x, dir.z));
-        zoom = zoomTarget = z;
+        zoom = zoomTarget = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
       },
     };
   }
 
   function frame(t) {
-    // ease toward targets — cinematic during the intro, snappy afterwards
-    const intro = t - bootAt < INTRO_MS;
-    const k = intro ? 0.028 : 0.2;
+    if (collectionCount !== sky.stars.length) {
+      collectionCount = sky.stars.length;
+      if (overview || !collectionCount) fitCollection();
+    }
+    const k = reducedMotion.matches ? 1 : 0.2;
     yaw += (yawT - yaw) * k;
     pitch += (pitchT - pitch) * k;
     pitch = clampPitch(pitch);
-    zoom += (zoomTarget - zoom) * (intro ? 0.028 : 0.12);
+    zoom += (zoomTarget - zoom) * (reducedMotion.matches ? 1 : 0.12);
+    const labelAlpha = skyLabelOpacity(zoom, hooks.areLabelsOn());
 
     const viz = hooks.isVizOn() ? hooks.getSpectrum(t) : null;
     const bass = viz ? (viz[0] + viz[1] + viz[2] + viz[3]) / 4 : 0;
@@ -608,7 +668,7 @@ export function initSky(canvas, hooks) {
     drawFloor(bass);
     if (viz) drawViz(viz);
     drawNebulae();
-    sky.planets.forEach((p) => drawPlanet(p, t));
+    sky.planets.forEach((p) => drawPlanet(p, t, labelAlpha));
 
     // project stars once per frame (also feeds hit testing)
     projStars.length = sky.stars.length;
@@ -617,7 +677,7 @@ export function initSky(canvas, hooks) {
     // constellation lines follow each asterism's spine-and-branch pattern
     ctx.save();
     sky.clusters.forEach((cl, i) => {
-      ctx.strokeStyle = i % 2 ? 'rgba(255,79,195,.28)' : 'rgba(61,255,110,.28)';
+      ctx.strokeStyle = i % 2 ? 'rgba(255,79,195,.55)' : 'rgba(61,255,110,.55)';
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);
       ctx.lineDashOffset = viz ? -(t * 0.03) : 0;
@@ -632,8 +692,8 @@ export function initSky(canvas, hooks) {
       ctx.stroke();
       ctx.setLineDash([]);
       const c = project(cl.center);
-      if (c) {
-        ctx.fillStyle = i % 2 ? 'rgba(255,79,195,.45)' : 'rgba(61,255,110,.45)';
+      if (c && labelAlpha > 0) {
+        ctx.fillStyle = `rgba(${i % 2 ? '255,79,195' : '61,255,110'},${0.75 * labelAlpha})`;
         ctx.font = '9px "Courier New",monospace';
         ctx.textAlign = 'center';
         ctx.fillText('⟨' + cl.name + '⟩', c.x, c.y + (0.16 * focal()) / c.z);
@@ -648,17 +708,17 @@ export function initSky(canvas, hooks) {
       if (!p) continue;
       const s = sky.stars[i];
       const isPlay = i === playIdx && !hooks.isPaused();
-      const tw = 0.55 + 0.45 * Math.sin(t * 0.002 * s.sp + s.tw);
+      const tw = 0.92 + 0.08 * Math.sin(t * 0.002 * s.sp + s.tw);
       const age = Math.min(1, (t - s.born) / 900);
       const col = s.pink || i === playIdx ? '255,79,195' : '61,255,110';
       const persp = Math.min(1.4, (0.75 + 0.35 / p.z) * Math.sqrt(zoom));
-      let r = s.r * (0.6 + 0.8 * age) * persp;
-      const glow = isPlay ? 20 + 6 * Math.sin(t * 0.006) + bass * 26 : 4 * tw * (1 + bass * 1.5);
+      let r = Math.max(0.9, s.r * (0.6 + 0.8 * age) * persp);
+      const glow = isPlay ? 20 + 6 * Math.sin(t * 0.006) + bass * 26 : 7 + 3 * tw + bass * 10;
       ctx.save();
       ctx.shadowColor = `rgba(${col},.95)`;
       ctx.shadowBlur = glow;
-      ctx.fillStyle = `rgba(${col},${isPlay ? 1 : 0.45 + 0.5 * tw})`;
-      if (isPlay) r = s.r * 1.9 * persp;
+      ctx.fillStyle = `rgba(${col},${isPlay ? 1 : 0.9 + 0.1 * tw})`;
+      if (isPlay) r = Math.max(r, s.r * 1.9 * persp);
       ctx.translate(p.x, p.y);
       ctx.rotate(Math.PI / 4);
       ctx.fillRect(-r, -r, r * 2, r * 2);
@@ -672,8 +732,8 @@ export function initSky(canvas, hooks) {
         ctx.stroke();
       }
       ctx.restore();
-      if (i === hoverStar) {
-        ctx.fillStyle = 'rgba(217,245,226,.95)';
+      if (i === hoverStar && labelAlpha > 0) {
+        ctx.fillStyle = `rgba(217,245,226,${0.95 * labelAlpha})`;
         ctx.font = '10px "Courier New",monospace';
         ctx.textAlign = 'left';
         ctx.fillText('⟨' + hooks.getStarLabel(i) + '⟩', p.x + 10, p.y - 8);
@@ -688,15 +748,19 @@ export function initSky(canvas, hooks) {
   return {
     // absolute yaw in radians; camera takes the shortest way around
     setYaw(rad) {
+      overview = false;
       let d = (rad - yaw) % TAU;
       if (d > Math.PI) d -= TAU;
       if (d < -Math.PI) d += TAU;
       yawT = yaw + d;
     },
     setPitch(rad) {
+      overview = false;
       pitchT = clampPitch(rad);
     },
     view: () => ({ yaw, pitch }),
+    fitCollection,
+    resize,
     isDragging: () => pointers.size > 0,
   };
 }
